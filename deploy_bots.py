@@ -34,6 +34,8 @@ BOTS = [
     {"name": "AutoSeries",     "session": "series",   "repo": "AutoSeries",      "start": "python bot.py"},
     {"name": "FileSequence",   "session": "sequence", "repo": "FileSequence",    "start": "python bot.py"},
     {"name": "RequestAcceptor","session": "request",  "repo": "RequestAcceptor", "start": "python bot.py"},
+    {"name": "AutoNews",       "session": "news",     "repo": "AutoNews",        "start": "python bot.py",
+     "extra_pip": ["pillow"]},
 
     {"name": "infinite-copy",  "session": "copy",  "repo": "infinite-copy",  "start": "python3 main.py",
      "extra_pip": ["requests", "pytz", "motor"]},
