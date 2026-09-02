@@ -36,6 +36,7 @@ BOTS = [
     {"name": "RequestAcceptor","session": "request",  "repo": "RequestAcceptor", "start": "python bot.py"},
     {"name": "AutoNews",       "session": "news",     "repo": "AutoNews",        "start": "python bot.py",
      "extra_pip": ["pillow"]},
+    {"name": "AutoPost",       "session": "post",     "repo": "PostBot",         "start": "python bot.py"},
 
     {"name": "infinite-copy",  "session": "copy",  "repo": "infinite-copy",  "start": "python3 main.py",
      "extra_pip": ["requests", "pytz", "motor"]},
@@ -47,10 +48,6 @@ BOTS = [
      "extra_pip": ["requests", "pytz", "motor"]},
     {"name": "infinite-stop",  "session": "stop",  "repo": "infinite-stop",  "start": "python3 main.py",
      "extra_pip": ["requests", "pytz", "motor"]},
-
-    {"name": "TZML", "session": "tzml", "repo": "TZML", "start": "bash start.sh",
-     "req_files": ["requirements.txt", "requirements-cli.txt"],
-     "apt": ["ffmpeg", "mediainfo", "aria2", "qbittorrent-nox", "p7zip-full"]},
 ]
 
 BASE_APT = ["git", "tmux", "python3-venv", "python3-pip", "curl"]
