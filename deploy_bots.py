@@ -4,7 +4,7 @@ Clone, set up and launch all bots on the VPS.
 
   export GITHUB_TOKEN=ghp_xxx
   python3 deploy_bots.py [--token ghp_xxx] [--only S...] [--skip S...]
-                        [--base-dir DIR] [--no-apt] [--no-start]
+                        [--base-dir DIR] [--no-apt] [--no-start] [--install-tools]
 
 Per bot: git clone/pull -> venv -> install reqs (+extras) -> tmux session.
 Run on the Linux VPS. Attach with: tmux attach -t <session>
@@ -33,6 +33,8 @@ BOTS = [
     {"name": "Auto-Ongoing",   "session": "ongoing",  "repo": "Auto-Ongoing",    "start": "python bot.py"},
     {"name": "AutoSeries",     "session": "series",   "repo": "AutoSeries",      "start": "python bot.py"},
     {"name": "Infinite-Index", "session": "index",    "repo": "Infinite-Index",  "start": "python bot.py"},
+    {"name": "AutoAnime",      "session": "anime",    "repo": "AutoAnime",       "start": "python bot.py", "apt": ["aria2", "ffmpeg"]},
+    {"name": "AutoPoster",     "session": "poster",   "repo": "AutoPoster",      "start": "python bot.py"},
     {"name": "FileSequence",   "session": "sequence", "repo": "FileSequence",    "start": "python bot.py"},
     {"name": "RequestAcceptor","session": "request",  "repo": "RequestAcceptor", "start": "python bot.py"},
     {"name": "AutoNews",       "session": "news",     "repo": "AutoNews",        "start": "python bot.py",
@@ -87,13 +89,26 @@ def install_apt(packages):
     if not have("apt-get"):
         warn(f"apt-get not found; install manually: {', '.join(packages)}")
         return
-    sudo = [] if os.geteuid() == 0 else ["sudo"]
+    sudo = [] if (hasattr(os, "geteuid") and os.geteuid() == 0) else (["sudo"] if have("sudo") else [])
     log(f"Installing system packages: {', '.join(packages)}")
     try:
         run(sudo + ["apt-get", "update", "-y"])
         run(sudo + ["apt-get", "install", "-y", *packages])
     except subprocess.CalledProcessError:
         warn(f"apt install failed for: {', '.join(packages)} (continuing)")
+
+
+def install_aria2_and_ffmpeg():
+    """Auto-install aria2c and ffmpeg on the VPS using sudo."""
+    if have("aria2c") and have("ffmpeg"):
+        return
+    log("Auto-installing aria2c and ffmpeg using sudo...")
+    sudo = [] if (hasattr(os, "geteuid") and os.geteuid() == 0) else ["sudo"]
+    try:
+        run(sudo + ["apt-get", "update", "-y"])
+        run(sudo + ["apt-get", "install", "-y", "aria2", "ffmpeg"])
+    except subprocess.CalledProcessError:
+        warn("apt install failed for aria2/ffmpeg (continuing)")
 
 
 def clone_or_update(bot, base_dir, token):
@@ -160,11 +175,17 @@ def main():
     ap.add_argument("--skip", nargs="+", metavar="S", help="skip these (session or folder name)")
     ap.add_argument("--no-apt", action="store_true", help="skip system packages")
     ap.add_argument("--no-start", action="store_true", help="set up but don't launch tmux")
+    ap.add_argument("--install-tools", action="store_true", help="auto-install aria2c and ffmpeg using sudo and exit")
     args = ap.parse_args()
 
     if sys.platform == "win32":
         err("Run this on the Linux VPS (needs tmux/venv/apt), not Windows.")
         sys.exit(1)
+
+    if args.install_tools:
+        install_aria2_and_ffmpeg()
+        if not args.only and not args.skip:
+            sys.exit(0)
 
     token = args.token or os.environ.get("GITHUB_TOKEN")
     if not token:
@@ -192,6 +213,7 @@ def main():
         sys.exit(1)
 
     if not args.no_apt:
+        install_aria2_and_ffmpeg()
         apt = list(dict.fromkeys(BASE_APT + [p for b in bots for p in b.get("apt", [])]))
         install_apt(apt)
 
