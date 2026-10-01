@@ -38,7 +38,8 @@ BOTS = [
     {"name": "FileSequence",   "session": "sequence", "repo": "FileSequence",    "start": "python bot.py"},
     {"name": "RequestAcceptor","session": "request",  "repo": "RequestAcceptor", "start": "python bot.py"},
     {"name": "AutoNews",       "session": "news",     "repo": "AutoNews",        "start": "python bot.py",
-     "extra_pip": ["pillow"]},
+     "aliases": ["nitter", "autonews"], "docker_dir": "nitter",
+     "apt": ["ffmpeg", "docker.io", "docker-compose-v2"], "extra_pip": ["pillow"]},
     {"name": "AutoPost",       "session": "post",     "repo": "PostBot",         "start": "python bot.py"},
 
     {"name": "infinite-copy",  "session": "copy",  "repo": "infinite-copy",  "start": "python3 main.py",
@@ -158,11 +159,36 @@ def pip_install(bot, dest, venv):
         run([pip, "install", *extra], check=False)
 
 
+def start_docker_services(bot, dest):
+    """Start docker compose services if specified (e.g. local Nitter for AutoNews)."""
+    rel = bot.get("docker_dir")
+    if not rel:
+        return
+    docker_dir = dest / rel
+    if (docker_dir / "compose.yml").exists() or (docker_dir / "docker-compose.yml").exists():
+        log(f"[{bot['name']}] starting docker services in {rel}...")
+        if not have("docker") and not have("docker-compose"):
+            warn(f"[{bot['name']}] docker / docker-compose not found, skipping container start")
+            return
+        dc = ["docker", "compose"] if have("docker") else ["docker-compose"]
+        try:
+            run(dc + ["up", "-d"], cwd=docker_dir, check=False)
+            log(f"[{bot['name']}] docker services in {rel} started", C.G)
+        except Exception as e:
+            warn(f"[{bot['name']}] docker compose up failed: {e}")
+
+
 def start_tmux(bot, dest):
     session = bot["session"]
     run(["tmux", "kill-session", "-t", session], check=False, quiet=True)
     run(["tmux", "new-session", "-d", "-s", session], check=True)
-    inner = f"cd '{dest}' && source venv/bin/activate && {bot['start']}"
+    pre_cmd = ""
+    rel = bot.get("docker_dir")
+    if rel:
+        docker_dir = dest / rel
+        if (docker_dir / "compose.yml").exists() or (docker_dir / "docker-compose.yml").exists():
+            pre_cmd = f"(cd '{docker_dir}' && (docker compose up -d 2>/dev/null || docker-compose up -d 2>/dev/null)); "
+    inner = f"{pre_cmd}cd '{dest}' && source venv/bin/activate && {bot['start']}"
     run(["tmux", "send-keys", "-t", session, inner, "C-m"], check=True)
     log(f"[{bot['name']}] started in tmux session '{session}'  ({bot['start']})", C.G)
 
@@ -200,7 +226,7 @@ def main():
     base_dir.mkdir(parents=True, exist_ok=True)
 
     def selected(bot):
-        keys = {bot["session"], bot["name"]}
+        keys = {bot["session"], bot["name"], *bot.get("aliases", [])}
         if args.only:
             return bool(keys & set(args.only))
         if args.skip:
@@ -225,6 +251,8 @@ def main():
             dest = clone_or_update(bot, base_dir, token)
             venv = make_venv(dest)
             pip_install(bot, dest, venv)
+            if bot.get("docker_dir"):
+                start_docker_services(bot, dest)
             if args.no_start:
                 results.append((bot, "set up (not started)"))
             else:
