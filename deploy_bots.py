@@ -17,6 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+os.environ["GIT_TERMINAL_PROMPT"] = "0"
+
 GITHUB_USER = "FallinTanishq"
 
 BOTS = [
@@ -89,6 +91,17 @@ def install_apt(packages):
     if not have("apt-get"):
         warn(f"apt-get not found; install manually: {', '.join(packages)}")
         return
+    pkg_bins = {
+        "git": "git",
+        "tmux": "tmux",
+        "curl": "curl",
+        "ffmpeg": "ffmpeg",
+        "aria2": "aria2c",
+        "docker.io": "docker",
+    }
+    packages = [p for p in packages if p not in pkg_bins or not have(pkg_bins[p])]
+    if not packages:
+        return
     sudo = [] if (hasattr(os, "geteuid") and os.geteuid() == 0) else (["sudo"] if have("sudo") else [])
     log(f"Installing system packages: {', '.join(packages)}")
     try:
@@ -111,16 +124,34 @@ def install_aria2_and_ffmpeg():
         warn("apt install failed for aria2/ffmpeg (continuing)")
 
 
+def clean_session_files(dest):
+    """Delete any old cached Pyrogram SQLite session files."""
+    cleaned = 0
+    patterns = ["*.session", "*.session-journal", "*.session-wal", "*.session-shm"]
+    for pat in patterns:
+        for f in dest.glob(pat):
+            try:
+                if f.is_file():
+                    f.unlink()
+                    cleaned += 1
+            except Exception as e:
+                warn(f"Failed to delete {f.name}: {e}")
+    if cleaned > 0:
+        log(f"Cleaned {cleaned} old session cache file(s) from {dest.name}")
+
+
 def clone_or_update(bot, base_dir, token):
     dest = base_dir / bot["name"]
     branch = bot.get("branch")
     auth_url = f"https://{token}@github.com/{GITHUB_USER}/{bot['repo']}.git"
 
     if (dest / ".git").exists():
-        log(f"[{bot['name']}] repo exists -> pulling")
+        log(f"[{bot['name']}] repo exists -> updating remote url and pulling")
+        run(["git", "remote", "set-url", "origin", auth_url], cwd=dest, check=False, quiet=True)
         if branch:
             run(["git", "checkout", branch], cwd=dest, check=False)
         run(["git", "pull", "--ff-only"], cwd=dest, check=False)
+        clean_session_files(dest)
         return dest
 
     log(f"[{bot['name']}] cloning {GITHUB_USER}/{bot['repo']}" + (f" @ {branch}" if branch else ""))
@@ -129,6 +160,7 @@ def clone_or_update(bot, base_dir, token):
         cmd += ["--branch", branch, "--single-branch"]
     cmd += [auth_url, str(dest)]
     run(cmd, quiet=True)
+    clean_session_files(dest)
     return dest
 
 
@@ -200,6 +232,8 @@ def main():
     ap.add_argument("--skip", nargs="+", metavar="S", help="skip these (session or folder name)")
     ap.add_argument("--no-apt", action="store_true", help="skip system packages")
     ap.add_argument("--no-start", action="store_true", help="set up but don't launch tmux")
+    ap.add_argument("--clean-sessions", action="store_true", default=True, help="clean old cached .session files (default: True)")
+    ap.add_argument("--keep-sessions", action="store_false", dest="clean_sessions", help="do not delete cached .session files")
     ap.add_argument("--install-tools", action="store_true", help="auto-install aria2c and ffmpeg using sudo and exit")
     args = ap.parse_args()
 
@@ -252,6 +286,8 @@ def main():
             pip_install(bot, dest, venv)
             if bot.get("docker_dir"):
                 start_docker_services(bot, dest)
+            if args.clean_sessions:
+                clean_session_files(dest)
             if args.no_start:
                 results.append((bot, "set up (not started)"))
             else:
