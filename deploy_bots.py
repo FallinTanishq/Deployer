@@ -36,7 +36,6 @@ BOTS = [
     {"name": "AutoAnime",      "session": "anime",    "repo": "AutoAnime",       "start": "python bot.py", "apt": ["aria2", "ffmpeg"]},
     {"name": "AutoPoster",     "session": "poster",   "repo": "AutoPoster",      "start": "python bot.py"},
     {"name": "FileSequence",   "session": "sequence", "repo": "FileSequence",    "start": "python bot.py"},
-    {"name": "RequestAcceptor","session": "request",  "repo": "RequestAcceptor", "start": "python bot.py"},
     {"name": "AutoNews",       "session": "news",     "repo": "AutoNews",        "start": "python bot.py",
      "aliases": ["nitter", "autonews"], "docker_dir": "nitter",
      "apt": ["ffmpeg", "docker.io", "docker-compose-v2"], "extra_pip": ["pillow"]},
