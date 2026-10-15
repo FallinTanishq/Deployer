@@ -143,7 +143,7 @@ def clean_session_files(dest):
 def clone_or_update(bot, base_dir, token):
     dest = base_dir / bot["name"]
     branch = bot.get("branch")
-    auth_url = f"https://{token}@github.com/{GITHUB_USER}/{bot['repo']}.git"
+    auth_url = f"https://{GITHUB_USER}:{token}@github.com/{GITHUB_USER}/{bot['repo']}.git"
 
     if (dest / ".git").exists():
         log(f"[{bot['name']}] repo exists -> updating remote url and pulling")
@@ -166,11 +166,11 @@ def clone_or_update(bot, base_dir, token):
 
 def make_venv(dest):
     venv = dest / "venv"
-    if (venv / "bin" / "python").exists():
+    if (venv / "bin" / "python").exists() and (venv / "bin" / "pip").exists():
         log("venv exists -> reuse")
         return venv
     log("creating venv")
-    run([sys.executable, "-m", "venv", str(venv)])
+    run([sys.executable, "-m", "venv", "--clear", str(venv)])
     return venv
 
 
