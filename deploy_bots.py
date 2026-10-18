@@ -53,6 +53,10 @@ BOTS = [
      "extra_pip": ["requests", "pytz", "motor"]},
     {"name": "infinite-stop",  "session": "stop",  "repo": "infinite-stop",  "start": "python3 main.py",
      "extra_pip": ["requests", "pytz", "motor"]},
+    {"name": "Infinite-Netflix", "session": "netflix", "repo": "Infinite-Netflix", "start": "python3 main.py",
+     "aliases": ["netflix"], "extra_pip": ["requests", "pytz", "motor"]},
+    {"name": "Infinite-Piracy",  "session": "piracy",  "repo": "Infinite-Piracy",  "start": "python3 main.py",
+     "aliases": ["piracy"], "extra_pip": ["requests", "pytz", "motor"]},
 ]
 
 BASE_APT = ["git", "tmux", "python3-venv", "python3-pip", "curl"]
