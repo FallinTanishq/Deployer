@@ -36,12 +36,14 @@ BOTS = [
     {"name": "AutoSeries",     "session": "series",   "repo": "AutoSeries",      "start": "python bot.py"},
     {"name": "Infinite-Index", "session": "index",    "repo": "Infinite-Index",  "start": "python bot.py"},
     {"name": "AutoAnime",      "session": "anime",    "repo": "AutoAnime",       "start": "python bot.py", "apt": ["aria2", "ffmpeg"]},
-    {"name": "AutoPoster",     "session": "poster",   "repo": "AutoPoster",      "start": "python bot.py"},
+    {"name": "AutoPoster",     "session": "autoposter", "repo": "AutoPoster",      "aliases": ["poster"], "start": "python bot.py"},
     {"name": "FileSequence",   "session": "sequence", "repo": "FileSequence",    "start": "python bot.py"},
     {"name": "AutoNews",       "session": "news",     "repo": "AutoNews",        "start": "python bot.py",
      "aliases": ["nitter", "autonews"], "docker_dir": "nitter",
      "apt": ["ffmpeg", "docker.io", "docker-compose-v2"], "extra_pip": ["pillow"]},
     {"name": "AutoPost",       "session": "post",     "repo": "PostBot",         "start": "python bot.py"},
+    {"name": "AZML",           "session": "azml",     "repo": "AZML",            "branch": "main",
+     "docker_only": True, "apt": ["docker.io", "docker-compose-v2"]},
 
     {"name": "infinite-copy",  "session": "copy",  "repo": "infinite-copy",  "start": "python3 main.py",
      "extra_pip": ["requests", "pytz", "motor"]},
@@ -194,6 +196,19 @@ def pip_install(bot, dest, venv):
         run([pip, "install", *extra], check=False)
 
 
+def get_docker_compose_cmd():
+    if have("docker"):
+        try:
+            res = subprocess.run(["docker", "compose", "version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if res.returncode == 0:
+                return ["docker", "compose"]
+        except Exception:
+            pass
+    if have("docker-compose"):
+        return ["docker-compose"]
+    return None
+
+
 def start_docker_services(bot, dest):
     """Start docker compose services if specified (e.g. local Nitter for AutoNews)."""
     rel = bot.get("docker_dir")
@@ -202,15 +217,25 @@ def start_docker_services(bot, dest):
     docker_dir = dest / rel
     if (docker_dir / "compose.yml").exists() or (docker_dir / "docker-compose.yml").exists():
         log(f"[{bot['name']}] starting docker services in {rel}...")
-        if not have("docker") and not have("docker-compose"):
+        dc = get_docker_compose_cmd()
+        if not dc:
             warn(f"[{bot['name']}] docker / docker-compose not found, skipping container start")
             return
-        dc = ["docker", "compose"] if have("docker") else ["docker-compose"]
         try:
             run(dc + ["up", "-d"], cwd=docker_dir, check=False)
             log(f"[{bot['name']}] docker services in {rel} started", C.G)
         except Exception as e:
             warn(f"[{bot['name']}] docker compose up failed: {e}")
+
+
+def start_docker_deployment(bot, dest):
+    """Deploy and start container for docker-only bots."""
+    dc = get_docker_compose_cmd()
+    if not dc:
+        raise RuntimeError("docker / docker-compose not found, cannot deploy")
+    log(f"[{bot['name']}] building and starting docker container...")
+    run(dc + ["up", "-d", "--build"], cwd=dest)
+    log(f"[{bot['name']}] docker container started successfully", C.G)
 
 
 def start_tmux(bot, dest):
@@ -252,6 +277,17 @@ def main():
 
     token = args.token or os.environ.get("GITHUB_TOKEN")
     if not token:
+        gh_hosts = Path.home() / ".config" / "gh" / "hosts.yml"
+        if gh_hosts.exists():
+            try:
+                with open(gh_hosts) as f:
+                    for line in f:
+                        if "oauth_token:" in line:
+                            token = line.split("oauth_token:")[1].strip()
+                            break
+            except Exception:
+                pass
+    if not token:
         err("No GitHub token. Set $GITHUB_TOKEN or pass --token ghp_xxx")
         sys.exit(1)
 
@@ -286,17 +322,26 @@ def main():
         log(f"===== {bot['name']}  (session: {bot['session']}) =====", C.B)
         try:
             dest = clone_or_update(bot, base_dir, token)
-            venv = make_venv(dest)
-            pip_install(bot, dest, venv)
-            if bot.get("docker_dir"):
-                start_docker_services(bot, dest)
-            if args.clean_sessions:
-                clean_session_files(dest)
-            if args.no_start:
-                results.append((bot, "set up (not started)"))
+            if bot.get("docker_only"):
+                if args.clean_sessions:
+                    clean_session_files(dest)
+                if args.no_start:
+                    results.append((bot, "set up (not started)"))
+                else:
+                    start_docker_deployment(bot, dest)
+                    results.append((bot, "running"))
             else:
-                start_tmux(bot, dest)
-                results.append((bot, "running"))
+                venv = make_venv(dest)
+                pip_install(bot, dest, venv)
+                if bot.get("docker_dir"):
+                    start_docker_services(bot, dest)
+                if args.clean_sessions:
+                    clean_session_files(dest)
+                if args.no_start:
+                    results.append((bot, "set up (not started)"))
+                else:
+                    start_tmux(bot, dest)
+                    results.append((bot, "running"))
         except subprocess.CalledProcessError as e:
             err(f"[{bot['name']}] failed: {e}")
             results.append((bot, "FAILED"))
@@ -308,10 +353,12 @@ def main():
     log("Summary", C.B)
     for bot, status in results:
         color = C.G if status == "running" else (C.R if status == "FAILED" else C.Y)
-        print(f"  {color}{status:<22}{C.END} {bot['name']:<16} tmux: {bot['session']}")
+        target = f"docker: {bot['name']}" if bot.get("docker_only") else f"tmux: {bot['session']}"
+        print(f"  {color}{status:<22}{C.END} {bot['name']:<16} {target}")
     print("=" * 60)
     print("\nAttach:  tmux attach -t <session>   (detach: Ctrl-b then d)")
-    print("List:    tmux ls")
+    print("Docker:  docker logs -f <container> (e.g. docker logs -f azml)")
+    print("List:    tmux ls / docker ps")
     print(f"Cloned:  {base_dir}")
 
     if any(s == "FAILED" for _, s in results):
