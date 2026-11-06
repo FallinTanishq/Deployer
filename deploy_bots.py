@@ -32,6 +32,8 @@ BOTS = [
     {"name": "AutoAniMovie",   "session": "animovie", "repo": "AutoAniMovie",    "start": "python bot.py"},
     {"name": "AutoCorn",       "session": "corn",     "repo": "AutoCorn",        "start": "python bot.py"},
     {"name": "AutoManga",      "session": "manga",    "repo": "AutoManga",       "start": "python bot.py"},
+    {"name": "PremiumManga",   "session": "pmanga",   "repo": "PremiumManga",    "start": "python bot.py",
+     "aliases": ["pmanga"]},
     {"name": "Auto-Ongoing",   "session": "ongoing",  "repo": "Auto-Ongoing",    "start": "python bot.py"},
     {"name": "AutoSeries",     "session": "series",   "repo": "AutoSeries",      "start": "python bot.py"},
     {"name": "Infinite-Index", "session": "index",    "repo": "Infinite-Index",  "start": "python bot.py"},
